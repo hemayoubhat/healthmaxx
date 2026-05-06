@@ -4,7 +4,7 @@ import OnboardingForm from '../components/OnboardingForm';
 import { calculateTDEE, getMacros } from '../lib/tdee';
 
 export default function Home() {
-  const [result, setResult] = useState(null);
+  const [result, setResult] = useState<any>(null);
 
   const handleSubmit = (form: any) => {
     const tdee = calculateTDEE(form);
