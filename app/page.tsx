@@ -6,7 +6,7 @@ import { calculateTDEE, getMacros } from '../lib/tdee';
 export default function Home() {
   const [result, setResult] = useState(null);
 
-  const handleSubmit = (form) => {
+  const handleSubmit = (form: any) => {
     const tdee = calculateTDEE(form);
     const macros = getMacros(tdee, form.goal, parseFloat(form.weight));
     setResult({ macros, form });
