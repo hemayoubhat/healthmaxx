@@ -38,7 +38,7 @@ export default function Home() {
   );
 }
 
-function Stat({ label, value }) {
+function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="bg-zinc-800 rounded-xl p-4">
       <p className="text-gray-400 text-sm">{label}</p>
