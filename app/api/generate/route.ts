@@ -1,25 +1,28 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import Groq from 'groq-sdk';
 import { NextRequest, NextResponse } from 'next/server';
 import { buildPrompt } from '../../../lib/prompts';
 import { calculateTDEE, getMacros } from '../../../lib/tdee';
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 export async function POST(req: NextRequest) {
   try {
     const form = await req.json();
-    
+
     const tdee = calculateTDEE(form);
     const macros = getMacros(tdee, form.goal, parseFloat(form.weight));
     const prompt = buildPrompt({ ...form, macros });
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
+    const completion = await groq.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 2000,
+    });
+
+    const text = completion.choices[0]?.message?.content || 'No plan generated';
 
     return NextResponse.json({ plan: text, macros });
   } catch (err) {
-    console.error(err);
-    return NextResponse.json({ error: 'Failed to generate plan' }, { status: 500 });
+    return NextResponse.json({ error: (err as Error).message }, { status: 500 });
   }
 }

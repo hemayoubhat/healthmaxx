@@ -14,8 +14,14 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       });
+    
       const data = await res.json();
-      setResult(data);
+console.log('API response:', data);
+if (!data.macros) {
+  alert('Error: ' + (data.error || 'No macros returned'));
+  return;
+}
+setResult(data);
     } catch (err) {
       alert('Something went wrong. Try again.');
     } finally {
