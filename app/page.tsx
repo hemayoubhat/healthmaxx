@@ -5,6 +5,8 @@ import OnboardingForm from '../components/OnboardingForm';
 import PlanDisplay from '../components/PlanDisplay';
 import { supabase } from '../lib/supabase';
 import { useSubscription } from '../lib/useSubscription';
+import Nav from '../components/Nav';
+
 
 export default function Home() {
   const [result, setResult] = useState<any>(null);
@@ -182,6 +184,7 @@ export default function Home() {
       {result && (
         <PlanDisplay plan={result.plan} macros={result.macros} onReset={() => setResult(null)} />
       )}
+      <Nav />
 
     </main>
   );
