@@ -81,8 +81,8 @@ export default function OnboardingForm({ onSubmit }) {
       </div>
 
       <button type="submit"
-        className="w-full bg-green-500 hover:bg-green-400 text-black font-bold py-3 rounded-xl transition">
-        Calculate & Generate Plan →
+  className="w-full bg-green-500 hover:bg-green-400 text-black font-bold py-3 rounded-xl transition mb-8">
+  Calculate & Generate Plan →
       </button>
     </form>
   );
