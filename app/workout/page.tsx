@@ -23,7 +23,7 @@ const PRESETS: Record<string,string[]> = {
   Other:     [],
 };
 
-// Group consecutive same-weight sessions — matches the user's example format
+// Group consecutive same-weight sessions
 function groupByWeight(logs: Log[]) {
   const out: { weight: number; sessions: Log[] }[] = [];
   for (const log of logs) {
@@ -35,7 +35,11 @@ function groupByWeight(logs: Log[]) {
 }
 
 function todayDow() { const d = new Date().getDay(); return d === 0 ? 6 : d - 1; }
-function todayStr()  { return new Date().toISOString().split('T')[0]; }
+// Local date (not UTC) so late-night/early-morning logs land on the right day
+function todayStr() {
+  const d = new Date();
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().split('T')[0];
+}
 
 export default function WorkoutPage() {
   const { color } = useTheme();
@@ -74,6 +78,12 @@ export default function WorkoutPage() {
       await Promise.all([loadEx(data.user.id), loadLogs(data.user.id), loadPlan(data.user.id)]);
     });
   }, []);
+
+  // Lock background scroll while a modal is open
+  useEffect(() => {
+    document.body.style.overflow = (showLog || showAddEx) ? 'hidden' : '';
+    return () => { document.body.style.overflow = ''; };
+  }, [showLog, showAddEx]);
 
   const loadEx = async (uid: string) => {
     const { data } = await supabase.from('exercises').select('*').eq('user_id', uid).order('name');
@@ -156,7 +166,7 @@ export default function WorkoutPage() {
   const ic = "bg-[#1A1A1A] rounded-xl px-4 py-3 text-white text-sm focus:outline-none w-full";
 
   return (
-    <main className="min-h-screen bg-black text-white pb-28">
+    <main className="min-h-screen bg-black text-white pb-36">
       {/* Header */}
       <div className="px-4 pt-14 pb-4">
         <h1 className="text-2xl font-bold">Workout</h1>
@@ -298,16 +308,13 @@ export default function WorkoutPage() {
                       <p className="text-gray-600 text-sm text-center py-2">No logs yet</p>
                     ) : (
                       <>
-                        {/* Column headers */}
                         <div className="flex gap-4 text-xs text-gray-600 px-1 mb-3">
                           <span className="w-20 flex-shrink-0">WEIGHT</span>
                           <span>SESSIONS — {ex.rep_min}–{ex.rep_max} rep target</span>
                         </div>
 
-                        {/* Grouped rows — matches user's example format exactly */}
                         <div className="space-y-2">
                           {groups.map((group, gi) => {
-                            const prevWeights = groups.slice(0, gi).map(g => g.weight);
                             const isPR     = maxWt === group.weight && gi === groups.map(g=>g.weight).lastIndexOf(maxWt);
                             const isDeload = gi > 0 && group.weight < groups[gi - 1].weight;
                             const isProgr  = gi > 0 && group.weight > groups[gi - 1].weight;
@@ -315,7 +322,6 @@ export default function WorkoutPage() {
 
                             return (
                               <div key={gi} className="flex items-start gap-4 py-2 border-b border-[#141414]">
-                                {/* Weight label */}
                                 <div className="w-20 flex-shrink-0 flex items-center gap-1.5 pt-1">
                                   <span className="font-bold text-sm" style={{ color: wtColor }}>
                                     {group.weight}kg
@@ -325,10 +331,8 @@ export default function WorkoutPage() {
                                   {isPR     && <span className="text-xs">🔥</span>}
                                 </div>
 
-                                {/* Session bubbles */}
                                 <div className="flex flex-wrap gap-2 flex-1">
                                   {group.sessions.map((log) => {
-                                    // Check if all sets hit target
                                     const repsArr = log.reps.split('/').map(Number);
                                     const allHit  = repsArr.every(r => r >= ex.rep_max);
                                     const anyMiss = repsArr.some(r => r < ex.rep_min);
@@ -354,7 +358,6 @@ export default function WorkoutPage() {
                           })}
                         </div>
 
-                        {/* Legend */}
                         <div className="flex gap-4 mt-3 text-xs text-gray-600">
                           <span style={{ color }} className="flex items-center gap-1"><span className="w-2 h-2 rounded" style={{ background: `${color}30` }} /> All sets hit</span>
                           <span className="text-red-400 flex items-center gap-1"><span className="w-2 h-2 rounded bg-red-900" /> Below target</span>
@@ -387,7 +390,6 @@ export default function WorkoutPage() {
             return (
               <div key={i} className="bg-[#0D0D0D] border rounded-2xl overflow-hidden transition"
                 style={{ borderColor: isToday ? `${color}50` : '#1A1A1A' }}>
-                {/* Row */}
                 <div className="px-4 py-3 flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <span className="font-bold w-8" style={{ color: isToday ? color : '#6b7280' }}>{day}</span>
@@ -400,7 +402,6 @@ export default function WorkoutPage() {
                   </button>
                 </div>
 
-                {/* Chips when not editing */}
                 {!editing && plan.planned_exercises?.length > 0 && (
                   <div className="px-4 pb-3 flex flex-wrap gap-1.5">
                     {plan.planned_exercises.map((n,j) => (
@@ -410,10 +411,8 @@ export default function WorkoutPage() {
                   </div>
                 )}
 
-                {/* Edit panel */}
                 {editing && (
                   <div className="border-t border-[#1A1A1A] px-4 py-4 space-y-4">
-                    {/* Day type */}
                     <div>
                       <p className="text-gray-500 text-xs font-semibold tracking-widest mb-2">DAY TYPE</p>
                       <div className="flex flex-wrap gap-2">
@@ -427,7 +426,6 @@ export default function WorkoutPage() {
                       </div>
                     </div>
 
-                    {/* Exercises */}
                     <div>
                       <p className="text-gray-500 text-xs font-semibold tracking-widest mb-2">EXERCISES</p>
                       {plan.planned_exercises?.length > 0 && (
@@ -452,7 +450,6 @@ export default function WorkoutPage() {
                       </div>
                     </div>
 
-                    {/* Notes */}
                     <input placeholder="Notes e.g. Zone 2 cardio 40min" value={plan.notes||''}
                       onChange={e => savePlan(i,{notes:e.target.value})}
                       className="w-full bg-[#141414] rounded-xl px-3 py-2 text-white text-xs focus:outline-none" />
@@ -466,14 +463,13 @@ export default function WorkoutPage() {
 
       {/* ── LOG FORM MODAL ── */}
       {showLog && (
-        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-end">
-          <div className="bg-[#0D0D0D] border border-[#1A1A1A] rounded-t-3xl w-full p-6 max-h-[92vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[60] flex items-end">
+          <div className="bg-[#0D0D0D] border border-[#1A1A1A] rounded-t-3xl w-full p-6 pb-12 max-h-[85dvh] overscroll-contain overflow-y-auto">
             <div className="flex justify-between items-center mb-5">
               <h3 className="text-white font-bold text-lg">Log a Lift</h3>
               <button onClick={() => setShowLog(false)} className="text-gray-500 text-2xl w-8 h-8">×</button>
             </div>
 
-            {/* Exercise selector */}
             <p className="text-gray-500 text-xs font-semibold tracking-widest mb-2">EXERCISE</p>
             <div className="max-h-40 overflow-y-auto space-y-1 mb-4">
               {exercises.map(ex => (
@@ -491,23 +487,20 @@ export default function WorkoutPage() {
 
             {selectedEx && (
               <>
-                {/* Date */}
                 <div className="mb-4">
                   <p className="text-gray-500 text-xs font-semibold tracking-widest mb-2">DATE</p>
                   <input type="date" value={logDate} onChange={e => setLogDate(e.target.value)}
                     className="w-full bg-[#1A1A1A] rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none" />
                 </div>
 
-                {/* Weight */}
                 <div className="mb-4">
                   <p className="text-gray-500 text-xs font-semibold tracking-widest mb-2">WEIGHT (kg)</p>
                   <input type="number" step="0.5" placeholder="e.g. 20" value={logWt}
-                    onChange={e => setLogWt(e.target.value)} autoFocus
+                    onChange={e => setLogWt(e.target.value)}
                     className="w-full bg-[#1A1A1A] rounded-xl px-4 py-3 text-white text-2xl font-bold text-center focus:outline-none"
                     style={{ caretColor: color }} />
                 </div>
 
-                {/* Reps per set */}
                 <div className="mb-5">
                   <p className="text-gray-500 text-xs font-semibold tracking-widest mb-2">
                     REPS PER SET — target {selectedEx.rep_min}–{selectedEx.rep_max}
@@ -524,7 +517,6 @@ export default function WorkoutPage() {
                     ))}
                   </div>
 
-                  {/* Live preview — exactly in the user's format */}
                   {logWt && logReps.some(r=>r) && (
                     <div className="mt-3 bg-[#141414] rounded-xl px-4 py-3 text-center">
                       <span className="font-bold text-lg" style={{ color }}>{logWt}kg</span>
@@ -548,8 +540,8 @@ export default function WorkoutPage() {
 
       {/* ── ADD EXERCISE MODAL ── */}
       {showAddEx && (
-        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-end">
-          <div className="bg-[#0D0D0D] border border-[#1A1A1A] rounded-t-3xl w-full p-6 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[60] flex items-end">
+          <div className="bg-[#0D0D0D] border border-[#1A1A1A] rounded-t-3xl w-full p-6 pb-12 max-h-[85dvh] overscroll-contain overflow-y-auto">
             <div className="flex justify-between items-center mb-5">
               <h3 className="text-white font-bold text-lg">Add to Library</h3>
               <button onClick={() => setShowAddEx(false)} className="text-gray-500 text-2xl">×</button>

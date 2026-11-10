@@ -18,7 +18,16 @@ export const useTheme = () => useContext(Ctx);
 
 export default function ThemeProvider({ children }: { children: ReactNode }) {
   const [color, setColor] = useState('#39FF14');
-  useEffect(() => { const s = localStorage.getItem('hm_accent'); if (s) setColor(s); }, []);
+
+  useEffect(() => {
+    const s = localStorage.getItem('hm_accent');
+    if (s) setColor(s);
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.style.setProperty('--accent', color);
+  }, [color]);
+
   const setTheme = (c: string) => { setColor(c); localStorage.setItem('hm_accent', c); };
   return <Ctx.Provider value={{ color, setTheme }}>{children}</Ctx.Provider>;
 }

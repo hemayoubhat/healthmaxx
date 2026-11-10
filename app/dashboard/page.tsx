@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabase';
 import Nav from '../../components/Nav';
+import { useTheme } from '../../components/ThemeProvider';
 
 function Ring({ pct, color, size = 90, stroke = 8, label, value }: any) {
   const r = (size - stroke) / 2;
@@ -34,7 +35,13 @@ function getGreeting() {
   return 'Good evening';
 }
 
+// Local date string (YYYY-MM-DD), matches the workout page
+function localDate(d: Date) {
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().split('T')[0];
+}
+
 export default function Dashboard() {
+  const { color } = useTheme();
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
   const [stats, setStats] = useState({ workouts: 0, suppsTaken: 0, suppsTotal: 0, streak: 0 });
@@ -44,32 +51,52 @@ export default function Dashboard() {
     supabase.auth.getUser().then(async ({ data }) => {
       if (!data.user) { router.push('/auth'); return; }
       setUser(data.user);
-      const [{ data: p }, { data: sessions }, { data: supps }] = await Promise.all([
-        supabase.from('profiles').select('*').eq('id', data.user.id).single(),
-        supabase.from('workout_sessions').select('id').eq('user_id', data.user.id)
-          .gte('created_at', new Date(Date.now() - 7 * 86400000).toISOString()),
+
+      const since = localDate(new Date(Date.now() - 60 * 86400000));
+      const [{ data: p }, { data: lifts }, { data: supps }] = await Promise.all([
+        supabase.from('profiles').select('*').eq('id', data.user.id).maybeSingle(),
+        supabase.from('lift_logs').select('date').eq('user_id', data.user.id).gte('date', since),
         supabase.from('supplement_logs').select('*').eq('user_id', data.user.id)
           .eq('date', new Date().toISOString().split('T')[0]),
       ]);
+
+      // Distinct training days
+      const days = new Set((lifts || []).map((l: any) => l.date as string));
+
+      // Workouts in the last 7 days (today included)
+      let workouts = 0;
+      for (let i = 0; i < 7; i++) {
+        if (days.has(localDate(new Date(Date.now() - i * 86400000)))) workouts++;
+      }
+
+      // Streak: consecutive days with a lift, counting back from today.
+      // If today isn't logged yet, start from yesterday so the streak isn't zeroed mid-day.
+      let streak = 0;
+      let start = days.has(localDate(new Date())) ? 0 : 1;
+      while (days.has(localDate(new Date(Date.now() - start * 86400000)))) {
+        streak++;
+        start++;
+      }
+
       setProfile(p);
       setStats({
-        workouts: sessions?.length || 0,
+        workouts,
         suppsTaken: supps?.filter((s: any) => s.taken).length || 0,
         suppsTotal: supps?.length || 0,
-        streak: sessions?.length || 0,
+        streak,
       });
     });
   }, []);
 
   const quickActions = [
-    { icon: '💪', label: 'Log Workout', sub: 'Track exercises & cardio', path: '/workout', color: '#39FF14' },
+    { icon: '💪', label: 'Log Workout', sub: 'Track lifts & progress', path: '/workout', color: color },
     { icon: '💊', label: 'Supplements', sub: 'Check your daily stack', path: '/supplements', color: '#00E5FF' },
     { icon: '🥗', label: 'Diet Plan', sub: 'Generate meal plan', path: '/', color: '#FFE66D' },
     { icon: '👤', label: 'Profile', sub: 'Stats & AI advice', path: '/profile', color: '#A855F7' },
   ];
 
   return (
-    <main className="min-h-screen bg-black text-white pb-28">
+    <main className="min-h-screen bg-black text-white pb-36">
       {/* Header */}
       <div className="px-4 pt-14 pb-6">
         <p className="text-gray-500 text-sm">{getGreeting()}</p>
@@ -83,7 +110,7 @@ export default function Dashboard() {
         <div className="bg-[#0D0D0D] border border-[#1A1A1A] rounded-3xl p-6">
           <p className="text-gray-500 text-xs font-semibold tracking-widest mb-6">THIS WEEK</p>
           <div className="flex justify-around">
-            <Ring pct={(stats.workouts / 5) * 100} color="#39FF14" label="Workouts" value={`${stats.workouts}/5`} />
+            <Ring pct={(stats.workouts / 5) * 100} color={color} label="Workouts" value={`${stats.workouts}/5`} />
             <Ring pct={stats.suppsTotal > 0 ? (stats.suppsTaken / stats.suppsTotal) * 100 : 0}
               color="#00E5FF" label="Supplements" value={`${stats.suppsTaken}/${stats.suppsTotal}`} />
             <Ring pct={Math.min((stats.streak / 7) * 100, 100)} color="#A855F7" label="Streak" value={`${stats.streak}d`} />
@@ -96,12 +123,12 @@ export default function Dashboard() {
         <div className="px-4 mb-5">
           <div className="bg-[#0D0D0D] border border-[#1A1A1A] rounded-3xl px-6 py-4 flex justify-around">
             <div className="text-center">
-              <p className="text-[#39FF14] font-bold text-xl">{profile.weight}kg</p>
+              <p className="font-bold text-xl" style={{ color }}>{profile.weight ?? '—'}kg</p>
               <p className="text-gray-600 text-xs">Weight</p>
             </div>
             <div className="w-px bg-[#1A1A1A]" />
             <div className="text-center">
-              <p className="text-[#00E5FF] font-bold text-xl">{profile.height}cm</p>
+              <p className="text-[#00E5FF] font-bold text-xl">{profile.height ?? '—'}cm</p>
               <p className="text-gray-600 text-xs">Height</p>
             </div>
             <div className="w-px bg-[#1A1A1A]" />
@@ -119,8 +146,7 @@ export default function Dashboard() {
         <div className="grid grid-cols-2 gap-3">
           {quickActions.map(a => (
             <button key={a.path} onClick={() => router.push(a.path)}
-              className="bg-[#0D0D0D] border border-[#1A1A1A] hover:border-opacity-50 rounded-2xl p-4 text-left transition"
-              style={{ '--hover-color': a.color } as any}
+              className="bg-[#0D0D0D] border border-[#1A1A1A] rounded-2xl p-4 text-left transition"
               onMouseEnter={e => (e.currentTarget.style.borderColor = `${a.color}50`)}
               onMouseLeave={e => (e.currentTarget.style.borderColor = '#1A1A1A')}>
               <div className="text-2xl mb-2">{a.icon}</div>

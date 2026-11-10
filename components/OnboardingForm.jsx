@@ -1,43 +1,40 @@
 'use client';
 import { useState } from 'react';
+import { useTheme } from './ThemeProvider';
 
-const inputClass = "w-full bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-green-500";
-const labelClass = "block text-sm text-gray-400 mb-1";
+const inputClass = "w-full bg-[#1A1A1A] border border-[#262626] rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-[var(--accent)] transition";
+const labelClass = "block text-xs font-semibold tracking-widest text-gray-500 mb-1.5";
 
 export default function OnboardingForm({ onSubmit }) {
+  const { color } = useTheme();
   const [form, setForm] = useState({
     age: '', weight: '', height: '', sex: 'male',
     activityLevel: 'moderate', goal: 'cut', restrictions: '', equipment: 'full gym'
   });
 
   const handle = (e) => setForm({ ...form, [e.target.name]: e.target.value });
-
-  const submit = (e) => {
-    e.preventDefault();
-    onSubmit(form);
-  };
+  const submit = (e) => { e.preventDefault(); onSubmit(form); };
 
   return (
     <form onSubmit={submit} className="space-y-4 w-full max-w-md">
-      
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className={labelClass}>Age</label>
+          <label className={labelClass}>AGE</label>
           <input name="age" type="number" placeholder="25" onChange={handle}
-            className={inputClass} required />
+            className={inputClass} style={{ caretColor: color }} required />
         </div>
         <div>
-          <label className={labelClass}>Weight (kg)</label>
+          <label className={labelClass}>WEIGHT (KG)</label>
           <input name="weight" type="number" placeholder="75" onChange={handle}
-            className={inputClass} required />
+            className={inputClass} style={{ caretColor: color }} required />
         </div>
         <div>
-          <label className={labelClass}>Height (cm)</label>
+          <label className={labelClass}>HEIGHT (CM)</label>
           <input name="height" type="number" placeholder="175" onChange={handle}
-            className={inputClass} required />
+            className={inputClass} style={{ caretColor: color }} required />
         </div>
         <div>
-          <label className={labelClass}>Sex</label>
+          <label className={labelClass}>SEX</label>
           <select name="sex" onChange={handle} className={inputClass}>
             <option value="male">Male</option>
             <option value="female">Female</option>
@@ -46,8 +43,8 @@ export default function OnboardingForm({ onSubmit }) {
       </div>
 
       <div>
-        <label className={labelClass}>Activity Level</label>
-        <select name="activityLevel" onChange={handle} className={inputClass}>
+        <label className={labelClass}>ACTIVITY LEVEL</label>
+        <select name="activityLevel" onChange={handle} defaultValue="moderate" className={inputClass}>
           <option value="sedentary">Sedentary (desk job, no exercise)</option>
           <option value="light">Light (1–3x/week)</option>
           <option value="moderate">Moderate (3–5x/week)</option>
@@ -57,7 +54,7 @@ export default function OnboardingForm({ onSubmit }) {
       </div>
 
       <div>
-        <label className={labelClass}>Goal</label>
+        <label className={labelClass}>GOAL</label>
         <select name="goal" onChange={handle} className={inputClass}>
           <option value="cut">Cut (lose fat)</option>
           <option value="bulk">Bulk (gain muscle)</option>
@@ -66,13 +63,13 @@ export default function OnboardingForm({ onSubmit }) {
       </div>
 
       <div>
-        <label className={labelClass}>Dietary Restrictions</label>
+        <label className={labelClass}>DIETARY RESTRICTIONS</label>
         <input name="restrictions" placeholder="e.g. vegetarian, no dairy"
-          onChange={handle} className={inputClass} />
+          onChange={handle} className={inputClass} style={{ caretColor: color }} />
       </div>
 
       <div>
-        <label className={labelClass}>Equipment Access</label>
+        <label className={labelClass}>EQUIPMENT ACCESS</label>
         <select name="equipment" onChange={handle} className={inputClass}>
           <option value="full gym">Full Gym</option>
           <option value="home with dumbbells">Home + Dumbbells</option>
@@ -81,8 +78,9 @@ export default function OnboardingForm({ onSubmit }) {
       </div>
 
       <button type="submit"
-  className="w-full bg-green-500 hover:bg-green-400 text-black font-bold py-3 rounded-xl transition mb-8">
-  Calculate & Generate Plan →
+        className="w-full font-bold py-3.5 rounded-xl text-black transition mb-8"
+        style={{ background: color, boxShadow: `0 0 20px ${color}40` }}>
+        Calculate & Generate Plan →
       </button>
     </form>
   );

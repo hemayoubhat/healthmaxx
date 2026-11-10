@@ -1,199 +1,169 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '../../lib/supabase';
-import Nav from '../../components/Nav';
-import { useTheme, THEMES } from '../../components/ThemeProvider';
+import OnboardingForm from '../components/OnboardingForm';
+import PlanDisplay from '../components/PlanDisplay';
+import Nav from '../components/Nav';
+import { useTheme } from '../components/ThemeProvider';
+import { supabase } from '../lib/supabase';
+import { useSubscription } from '../lib/useSubscription';
 
-export default function ProfilePage() {
-  const { color, setTheme } = useTheme();
+export default function Home() {
+  const { color } = useTheme();
+  const [result, setResult] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<any>(null);
-  const [form, setForm] = useState({ name: '', age: '', weight: '', height: '', goal: 'cut' });
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [recs, setRecs] = useState('');
-  const [loadingRecs, setLoadingRecs] = useState(false);
+  const [savedPlans, setSavedPlans] = useState<any[]>([]);
+  const [plansGenerated, setPlansGenerated] = useState(0);
   const router = useRouter();
+  const { isPro } = useSubscription(user?.id || null);
 
   useEffect(() => {
-    supabase.auth.getUser().then(async ({ data }) => {
-      if (!data.user) { router.push('/auth'); return; }
+    supabase.auth.getUser().then(({ data }) => {
       setUser(data.user);
-      const { data: p } = await supabase.from('profiles').select('*').eq('id', data.user.id).single();
-      if (p) setForm({
-        name: p.name || '',
-        age: p.age?.toString() || '',
-        weight: p.weight?.toString() || '',
-        height: p.height?.toString() || '',
-        goal: p.goal || 'cut',
-      });
+      if (data.user) fetchPlans(data.user.id);
     });
+    setPlansGenerated(parseInt(localStorage.getItem('plansGenerated') || '0'));
   }, []);
 
-  const save = async () => {
-    if (!user) return;
-    setSaving(true);
-    await supabase.from('profiles').upsert({
-      id: user.id,
-      name: form.name,
-      age: parseInt(form.age),
-      weight: parseFloat(form.weight),
-      height: parseFloat(form.height),
-      goal: form.goal,
-    });
-    setSaving(false);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('success')) alert('🎉 Welcome to HealthMaxx Pro!');
+  }, []);
+
+  const fetchPlans = async (userId: string) => {
+    const { data } = await supabase.from('plans').select('*')
+      .eq('user_id', userId).order('created_at', { ascending: false });
+    setSavedPlans(data || []);
   };
 
-  const getRecs = async () => {
-    setLoadingRecs(true);
+  const handleCheckout = async () => {
+    if (!user) { router.push('/auth'); return; }
+    const res = await fetch('/api/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: user.id, email: user.email }),
+    });
+    const { url } = await res.json();
+    window.location.href = url;
+  };
+
+  const handleSubmit = async (form: any) => {
+    if (!isPro) {
+      if (!user && plansGenerated >= 1) { router.push('/auth'); return; }
+      if (user && plansGenerated >= 2) {
+        alert('Upgrade to Pro for unlimited plans!');
+        handleCheckout();
+        return;
+      }
+    }
+
+    setLoading(true);
     try {
-      const res = await fetch('/api/recommendations', {
+      const res = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       });
-      const d = await res.json();
-      setRecs(d.recommendations || d.error);
+      const data = await res.json();
+      if (!data.macros) { alert('Error: ' + (data.error || 'No plan returned')); return; }
+
+      setResult(data);
+      const newCount = plansGenerated + 1;
+      setPlansGenerated(newCount);
+      localStorage.setItem('plansGenerated', newCount.toString());
+
+      if (user) {
+        await supabase.from('plans').insert({
+          user_id: user.id, goal: form.goal,
+          calories: data.macros.calories, protein: data.macros.protein,
+          carbs: data.macros.carbs, fat: data.macros.fat, plan_text: data.plan,
+        });
+        fetchPlans(user.id);
+      }
+    } catch {
+      alert('Something went wrong. Try again.');
     } finally {
-      setLoadingRecs(false);
+      setLoading(false);
     }
   };
 
-  const bmi = form.weight && form.height
-    ? (parseFloat(form.weight) / Math.pow(parseFloat(form.height) / 100, 2)).toFixed(1)
-    : null;
-  const bmiNum = bmi ? parseFloat(bmi) : 0;
-  const bmiColor = bmi ? (bmiNum < 18.5 ? '#00E5FF' : bmiNum < 25 ? '#39FF14' : bmiNum < 30 ? '#FFE66D' : '#FF6B6B') : '#fff';
-  const bmiLabel = bmi ? (bmiNum < 18.5 ? 'Underweight' : bmiNum < 25 ? 'Healthy' : bmiNum < 30 ? 'Overweight' : 'Obese') : '';
-
-  const ic = "w-full bg-[#1A1A1A] rounded-xl px-4 py-3 text-white text-sm focus:outline-none";
-
   return (
-    <main className="min-h-screen bg-black text-white pb-36">
+    <main className="min-h-screen bg-black text-white flex flex-col items-center px-4 pt-12 pb-40">
 
       {/* Header */}
-      <div className="px-4 pt-14 pb-4">
-        <h1 className="text-2xl font-bold">Profile</h1>
-        <p className="text-gray-600 text-sm mt-1">{user?.email}</p>
+      <div className="w-full max-w-2xl flex justify-between items-center mb-8">
+        <div>
+          <h1 className="text-3xl font-bold" style={{ color }}>HealthMaxx</h1>
+          <p className="text-gray-500 text-sm">Science-based plans</p>
+        </div>
+        <div className="flex items-center gap-3">
+          {isPro && (
+            <span className="text-black text-xs font-bold px-2 py-1 rounded-full" style={{ background: color }}>PRO</span>
+          )}
+          {!user && (
+            <button onClick={() => router.push('/auth')}
+              className="font-bold px-4 py-2 rounded-xl text-sm text-black"
+              style={{ background: color, boxShadow: `0 0 16px ${color}40` }}>
+              Sign In
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Body Metrics */}
-      {bmi && (
-        <div className="px-4 mb-5">
-          <div className="bg-[#0D0D0D] border border-[#1A1A1A] rounded-3xl px-6 py-5">
-            <p className="text-gray-500 text-xs font-semibold tracking-widest mb-4">BODY METRICS</p>
-            <div className="flex justify-around text-center">
-              <div>
-                <p className="font-bold text-2xl" style={{ color: bmiColor, textShadow: `0 0 12px ${bmiColor}60` }}>{bmi}</p>
-                <p className="text-gray-600 text-xs">BMI</p>
-                <p className="text-xs mt-1" style={{ color: bmiColor }}>{bmiLabel}</p>
+      {/* Pro Banner */}
+      {!isPro && !result && !loading && (
+        <div className="w-full max-w-2xl bg-[#0D0D0D] rounded-3xl p-4 mb-6 flex justify-between items-center"
+          style={{ border: `1px solid ${color}40` }}>
+          <div>
+            <p className="text-white font-semibold text-sm">HealthMaxx Pro — $9.99/mo</p>
+            <p className="text-gray-500 text-xs mt-0.5">Unlimited plans · Save history · Priority AI</p>
+          </div>
+          <button onClick={handleCheckout}
+            className="font-bold px-4 py-2 rounded-xl text-sm text-black whitespace-nowrap"
+            style={{ background: color }}>
+            Upgrade →
+          </button>
+        </div>
+      )}
+
+      {/* Saved Plans */}
+      {user && savedPlans.length > 0 && !result && !loading && (
+        <div className="w-full max-w-2xl mb-8">
+          <p className="text-gray-500 text-xs font-semibold tracking-widest mb-3">SAVED PLANS</p>
+          <div className="space-y-2">
+            {savedPlans.map((p) => (
+              <div key={p.id}
+                onClick={() => setResult({ plan: p.plan_text, macros: { calories: p.calories, protein: p.protein, carbs: p.carbs, fat: p.fat } })}
+                className="bg-[#0D0D0D] border border-[#1A1A1A] rounded-2xl px-4 py-3 flex justify-between items-center cursor-pointer transition"
+                onMouseEnter={e => (e.currentTarget.style.borderColor = color)}
+                onMouseLeave={e => (e.currentTarget.style.borderColor = '#1A1A1A')}>
+                <div>
+                  <span className="text-white capitalize font-medium text-sm">{p.goal} Plan</span>
+                  <span className="text-gray-600 text-xs ml-3">{p.calories} kcal · {p.protein}g protein</span>
+                </div>
+                <span className="text-gray-600 text-xs">{new Date(p.created_at).toLocaleDateString()}</span>
               </div>
-              <div className="w-px bg-[#1A1A1A]" />
-              <div>
-                <p className="font-bold text-2xl" style={{ color }}>{form.weight}kg</p>
-                <p className="text-gray-600 text-xs">Weight</p>
-              </div>
-              <div className="w-px bg-[#1A1A1A]" />
-              <div>
-                <p className="font-bold text-2xl text-[#00E5FF]">{form.height}cm</p>
-                <p className="text-gray-600 text-xs">Height</p>
-              </div>
-            </div>
+            ))}
           </div>
         </div>
       )}
 
-      {/* Personal Info */}
-      <div className="px-4 mb-5">
-        <div className="bg-[#0D0D0D] border border-[#1A1A1A] rounded-3xl p-5 space-y-4">
-          <p className="text-gray-500 text-xs font-semibold tracking-widest">PERSONAL INFO</p>
+      {/* States */}
+      {!result && !loading && <OnboardingForm onSubmit={handleSubmit} />}
 
-          <input placeholder="Your name" value={form.name}
-            onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
-            className={ic} style={{ caretColor: color }} />
-
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <p className="text-gray-600 text-xs mb-1">AGE</p>
-              <input type="number" placeholder="25" value={form.age}
-                onChange={e => setForm(p => ({ ...p, age: e.target.value }))}
-                className={ic} style={{ caretColor: color }} />
-            </div>
-            <div>
-              <p className="text-gray-600 text-xs mb-1">WEIGHT kg</p>
-              <input type="number" placeholder="75" value={form.weight}
-                onChange={e => setForm(p => ({ ...p, weight: e.target.value }))}
-                className={ic} style={{ caretColor: color }} />
-            </div>
-            <div>
-              <p className="text-gray-600 text-xs mb-1">HEIGHT cm</p>
-              <input type="number" placeholder="175" value={form.height}
-                onChange={e => setForm(p => ({ ...p, height: e.target.value }))}
-                className={ic} style={{ caretColor: color }} />
-            </div>
-          </div>
-
-          <select value={form.goal} onChange={e => setForm(p => ({ ...p, goal: e.target.value }))} className={ic}>
-            <option value="cut">Cut — Lose Fat</option>
-            <option value="bulk">Bulk — Gain Muscle</option>
-            <option value="recomp">Recomp — Body Recomposition</option>
-            <option value="longevity">Longevity — Health Optimization</option>
-          </select>
-
-          <button onClick={save} disabled={saving}
-            className="w-full font-bold py-3 rounded-xl text-black transition"
-            style={{ background: saved ? '#16a34a' : color, boxShadow: `0 0 16px ${color}40` }}>
-            {saving ? 'Saving…' : saved ? '✓ Saved!' : 'Save Profile'}
-          </button>
+      {loading && (
+        <div className="text-center space-y-3 mt-12">
+          <div className="w-14 h-14 rounded-full mx-auto flex items-center justify-center text-2xl animate-pulse"
+            style={{ border: `2px solid ${color}`, boxShadow: `0 0 24px ${color}60` }}>⚡</div>
+          <p className="text-white font-semibold">Generating your plan…</p>
+          <p className="text-gray-500 text-sm">Analysing data · Calculating macros · Building schedule</p>
         </div>
-      </div>
+      )}
 
-      {/* AI Recommendations */}
-      <div className="px-4 mb-5">
-        <div className="bg-[#0D0D0D] border border-[#1A1A1A] rounded-3xl p-5">
-          <p className="text-gray-500 text-xs font-semibold tracking-widest mb-4">AI RECOMMENDATIONS</p>
-          {recs
-            ? <div className="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap">{recs}</div>
-            : <p className="text-gray-600 text-sm">Personalized advice based on your stats, goal, and body metrics.</p>
-          }
-          <button onClick={getRecs} disabled={loadingRecs}
-            className="w-full border font-bold py-3 rounded-xl mt-4 transition text-sm"
-            style={{ borderColor: color, color: loadingRecs ? '#666' : color }}>
-            {loadingRecs ? '⚡ Generating…' : '✨ Get AI Recommendations'}
-          </button>
-        </div>
-      </div>
-
-      {/* Accent Color Picker */}
-      <div className="px-4 mb-5">
-        <div className="bg-[#0D0D0D] border border-[#1A1A1A] rounded-3xl p-5">
-          <p className="text-gray-500 text-xs font-semibold tracking-widest mb-5">ACCENT COLOR</p>
-          <div className="grid grid-cols-5 gap-4">
-            {THEMES.map(t => (
-              <button key={t.color} onClick={() => setTheme(t.color)}
-                className="flex flex-col items-center gap-2">
-                <div className="w-11 h-11 rounded-2xl transition-all duration-200"
-                  style={{
-                    background: t.color,
-                    boxShadow: color === t.color ? `0 0 20px ${t.color}` : 'none',
-                    transform: color === t.color ? 'scale(1.2)' : 'scale(1)',
-                  }} />
-                <span className="text-gray-500 text-xs">{t.name}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Sign Out */}
-      <div className="px-4">
-        <button onClick={async () => { await supabase.auth.signOut(); router.push('/auth'); }}
-          className="w-full border border-[#1A1A1A] text-gray-600 hover:text-white py-3 rounded-xl transition text-sm">
-          Sign Out
-        </button>
-      </div>
+      {result && (
+        <PlanDisplay plan={result.plan} macros={result.macros} onReset={() => setResult(null)} />
+      )}
 
       <Nav />
     </main>
